@@ -1,24 +1,29 @@
 import ballerina/http;
-import ballerina/io;
 import ballerinax/googleapis.sheets;
 import ballerina/lang.'float as langFloat;
 import ballerina/regex;
 import ballerina/log;
+import ballerina/os;
 
 
 // Google Sheets API client configuration parameters
-configurable string gsheetsClientID = ?;
-configurable string gsheetsClientSecret = ?;
-configurable string gsheetsRefreshToken = ?;
+final string gsheetsClientID = os:getEnv("GSHEETS_CLIENT_ID");
+final string gsheetsClientSecret = os:getEnv("GSHEETS_CLIENT_SECRET");
+final string gsheetsRefreshToken = os:getEnv("GSHEETS_REFRESH_TOKEN");
 configurable string sheetId = ?;
 configurable string sheetName = ?;
 
 // OpenAI token
-configurable string openAIToken = ?;
+// configurable string openAIToken = ?;
+final string openAIToken = os:getEnv("OPENAI_KEY");
 
 
 type Request record {|
     string question;
+|};
+
+type Response record {|
+    string answer;
 |};
 
 type OpenAIEmbeddingPrompt record {
@@ -163,7 +168,6 @@ function constructPrompt(string question, map<string> documents, map<float[]> do
         string content = <string>documents[heading];
 
         contextLen += countWords(content);
-        io:println(contextLen);
         if contextLen > maxLen {
             break;
         }
@@ -218,11 +222,11 @@ function loadData(string sheetId, string sheetName = "Sheet1") returns [map<stri
 }
 
 // Load the data and compute the embeddings when the service starts
-[map<string>, map<float[]>] [documents, doc_embeddings]= check loadData(sheetId);
+[map<string>, map<float[]>] [documents, doc_embeddings]= check loadData(sheetId, sheetName);
 
 service / on new http:Listener(8080) {
     
-    resource function post generateAnswer (@http:Payload Request request) returns string {
+    resource function post generateAnswer (@http:Payload Request request) returns Response {
 
         // string question = "What is choreo?";
         string question = request.question;
@@ -231,7 +235,9 @@ service / on new http:Listener(8080) {
 
         if prompt is error{
             log:printError("Error constructing prompt");
-            return "";
+            return {
+                answer: ""
+            };
         }
         
         log:printInfo(prompt);
@@ -240,11 +246,15 @@ service / on new http:Listener(8080) {
 
         if answer is error{
             log:printError("Error generating answer");
-            return "";
+            return {
+                answer: ""
+            };
         }
 
         log:printInfo(answer);
 
-        return answer;
+        return {
+            answer: answer
+        };
     }
 }
